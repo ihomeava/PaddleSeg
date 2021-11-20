@@ -1,0 +1,10 @@
+_base_: '../_base_/pascal_vocleather.yml'
+
+batch_size: 12
+iters: 160000
+
+model:
+  type: UNet
+  #num_classes: 21
+  use_deconv: False
+  pretrained: Null

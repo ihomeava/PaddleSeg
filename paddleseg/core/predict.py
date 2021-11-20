@@ -78,7 +78,7 @@ def predict(model,
         img_lists = partition_list(image_list, nranks)
     else:
         img_lists = [image_list]
-
+            
     added_saved_dir = os.path.join(save_dir, 'added_prediction')
     pred_saved_dir = os.path.join(save_dir, 'pseudo_color_prediction')
 
@@ -86,7 +86,7 @@ def predict(model,
     progbar_pred = progbar.Progbar(target=len(img_lists[0]), verbose=1)
     with paddle.no_grad():
         for i, im_path in enumerate(img_lists[local_rank]):
-            im = cv2.imread(im_path)
+            im = cv2.imdecode(np.fromfile(im_path,dtype=np.uint8),-1) # BGR
             ori_shape = im.shape[:2]
             im, _ = transforms(im)
             im = im[np.newaxis, ...]
@@ -126,14 +126,14 @@ def predict(model,
 
             # save added image
             added_image = utils.visualize.visualize(im_path, pred, weight=0.6)
-            added_image_path = os.path.join(added_saved_dir, im_file)
+            added_image_path = os.path.join("%s%s" % (added_saved_dir, im_file))
             mkdir(added_image_path)
             cv2.imwrite(added_image_path, added_image)
 
             # save pseudo color prediction
             pred_mask = utils.visualize.get_pseudo_color_map(pred)
-            pred_saved_path = os.path.join(pred_saved_dir,
-                                           im_file.rsplit(".")[0] + ".png")
+            pred_saved_path = os.path.join("%s%s" % (pred_saved_dir,
+                                           im_file.rsplit(".")[0] + ".png"))
             mkdir(pred_saved_path)
             pred_mask.save(pred_saved_path)
 

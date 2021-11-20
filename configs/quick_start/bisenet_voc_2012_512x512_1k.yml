@@ -1,0 +1,46 @@
+batch_size: 4
+iters: 1000
+
+train_dataset:
+  type: Dataset
+  dataset_root: data/voc/VOCdevkit/VOC2012/
+  train_path: data/voc/VOCdevkit/VOC2012/train.txt
+  num_classes: 20
+  transforms:
+    - type: Resize
+      target_size: [512, 512]
+    - type: RandomHorizontalFlip
+    - type: Normalize
+  mode: train
+
+val_dataset:
+  type: Dataset
+  dataset_root: data/voc/VOCdevkit/VOC2012/
+  val_path: data/voc/VOCdevkit/VOC2012/val.txt
+  transforms:
+    - type: Resize
+      target_size: [512, 512]
+    - type: Normalize
+  mode: val
+
+optimizer:
+  type: sgd
+  momentum: 0.9
+  weight_decay: 4.0e-5
+
+learning_rate:
+  value: 0.01
+  decay:
+    type: poly
+    power: 0.9
+    end_lr: 0
+
+loss:
+  types:
+    - type: CrossEntropyLoss
+  coef: [1, 1, 1, 1, 1]
+
+model:
+  type: BiSeNetV2
+  num_classes: 20
+  pretrained: Null
