@@ -1,20 +1,47 @@
-_base_: '../_base_/pascal_vocleather.yml'
+batch_size: 16
+iters: 100000
+
+train_dataset:
+  type: Dataset
+  num_classes: 2
+  dataset_root: data/voc/VOCdevkit/VOCleather/
+  train_path: data/voc/VOCdevkit/VOCleather/train.txt
+  transforms:
+    - type: Resize
+      target_size: [512, 512]
+    - type: RandomHorizontalFlip
+    - type: Normalize
+  mode: train
+
+val_dataset:
+  type: Dataset
+  num_classes: 2
+  dataset_root: data/voc/VOCdevkit/VOCleather/
+  val_path: data/voc/VOCdevkit/VOCleather/val.txt
+  transforms:
+    - type: Resize
+      target_size: [512, 512]
+    - type: Normalize
+  mode: val
+
+optimizer:
+  type: sgd
+  momentum: 0.9
+  weight_decay: 4.0e-5
+
+learning_rate:
+  value: 0.01
+  decay:
+    type: poly
+    power: 0.9
+    end_lr: 0
 
 loss:
   types:
     - type: CrossEntropyLoss
-  coef: [1, 0.4]
+  coef: [1, 1, 1, 1, 1]
 
 model:
-  type: ANN
-  backbone:
-    type: ResNet50_vd
-    output_stride: 8
-    pretrained: https://bj.bcebos.com/paddleseg/dygraph/resnet50_vd_ssld_v2.tar.gz
-  backbone_indices: [2, 3]
-  key_value_channels: 256
-  inter_channels: 512
-  psp_size: [1, 3, 6, 8]
-  enable_auxiliary_loss: True
-  align_corners: False
-  pretrained: null
+  type: BiSeNetV2
+  pretrained: Null
+
