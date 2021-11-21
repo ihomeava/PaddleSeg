@@ -91,7 +91,7 @@ def main(args):
             # Assume label ranges [0, 255] for uint8,
             if lbl.min() >= 0 and lbl.max() <= 255:
                 lbl_pil = PIL.Image.fromarray(lbl.astype(np.uint8), mode='P')
-                lbl_pil.putpalette(color_map)
+                #lbl_pil.putpalette(color_map)
                 lbl_pil.save(out_png_file)
             else:
                 raise ValueError(
