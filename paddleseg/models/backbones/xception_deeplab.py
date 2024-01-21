@@ -67,8 +67,7 @@ def gen_bottleneck_params(backbone='xception_65'):
         }
     else:
         raise ValueError(
-            "Xception backbont only support xception_41/xception_65/xception_71"
-        )
+            "Xception backbont only support xception_41/xception_65/xception_71")
     return bottleneck_params
 
 
@@ -99,7 +98,7 @@ class ConvBNLayer(nn.Layer):
         return self._act_op(self._bn(self._conv(inputs)))
 
 
-class Seperate_Conv(nn.Layer):
+class Separate_Conv(nn.Layer):
     def __init__(self,
                  input_channels,
                  output_channels,
@@ -108,7 +107,7 @@ class Seperate_Conv(nn.Layer):
                  dilation=1,
                  act=None,
                  name=None):
-        super(Seperate_Conv, self).__init__()
+        super(Separate_Conv, self).__init__()
 
         self._conv1 = nn.Conv2D(
             in_channels=input_channels,
@@ -169,21 +168,21 @@ class Xception_Block(nn.Layer):
         self.skip_conv = skip_conv
         self.activation_fn_in_separable_conv = activation_fn_in_separable_conv
         if not activation_fn_in_separable_conv:
-            self._conv1 = Seperate_Conv(
+            self._conv1 = Separate_Conv(
                 input_channels,
                 output_channels[0],
                 stride=strides[0],
                 filter=filter_size[0],
                 dilation=dilation,
                 name=name + "/separable_conv1")
-            self._conv2 = Seperate_Conv(
+            self._conv2 = Separate_Conv(
                 output_channels[0],
                 output_channels[1],
                 stride=strides[1],
                 filter=filter_size[1],
                 dilation=dilation,
                 name=name + "/separable_conv2")
-            self._conv3 = Seperate_Conv(
+            self._conv3 = Separate_Conv(
                 output_channels[1],
                 output_channels[2],
                 stride=strides[2],
@@ -191,7 +190,7 @@ class Xception_Block(nn.Layer):
                 dilation=dilation,
                 name=name + "/separable_conv3")
         else:
-            self._conv1 = Seperate_Conv(
+            self._conv1 = Separate_Conv(
                 input_channels,
                 output_channels[0],
                 stride=strides[0],
@@ -199,7 +198,7 @@ class Xception_Block(nn.Layer):
                 act="relu",
                 dilation=dilation,
                 name=name + "/separable_conv1")
-            self._conv2 = Seperate_Conv(
+            self._conv2 = Separate_Conv(
                 output_channels[0],
                 output_channels[1],
                 stride=strides[1],
@@ -207,7 +206,7 @@ class Xception_Block(nn.Layer):
                 act="relu",
                 dilation=dilation,
                 name=name + "/separable_conv2")
-            self._conv3 = Seperate_Conv(
+            self._conv3 = Separate_Conv(
                 output_channels[1],
                 output_channels[2],
                 stride=strides[2],
@@ -256,12 +255,17 @@ class XceptionDeeplab(nn.Layer):
 
      Args:
          backbone (str): Which type of Xception_DeepLab to select. It should be one of ('xception_41', 'xception_65', 'xception_71').
+         in_channels (int, optional): The channels of input image. Default: 3.
          pretrained (str, optional): The path of pretrained model.
          output_stride (int, optional): The stride of output features compared to input images. It is 8 or 16. Default: 16.
 
     """
 
-    def __init__(self, backbone, pretrained=None, output_stride=16):
+    def __init__(self,
+                 backbone,
+                 in_channels=3,
+                 pretrained=None,
+                 output_stride=16):
 
         super(XceptionDeeplab, self).__init__()
 
@@ -270,7 +274,7 @@ class XceptionDeeplab(nn.Layer):
         self.feat_channels = [128, 2048]
 
         self._conv1 = ConvBNLayer(
-            3,
+            in_channels,
             32,
             3,
             stride=2,

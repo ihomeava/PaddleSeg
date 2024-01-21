@@ -1,56 +1,66 @@
-# 模型导出
+English | [简体中文](model_export_cn.md)
 
-本教程提供了一个将训练好的动态图模型转化为静态图模型并进行部署的例子
+# Model Export
 
-*注意：如果已经通过量化或者剪枝优化过模型，则模型已经保存为静态图模型，可以直接查看[部署](#模型部署预测)*
+After model training, we can export the inference model and deploy it using inference library, which achieves faster inference speed.
 
-## 获取预训练模型
+This tutorial will show how to export a trained model。
 
-*注意：下述例子为Linux或者Mac上执行的例子，windows请自行在浏览器下载[参数](https://paddleseg.bj.bcebos.com/dygraph/cityscapes/bisenet_cityscapes_1024x1024_160k/model.pdparams)并存放到所创建的目录*
-```shell
-mkdir bisenet && cd bisenet
-wget https://paddleseg.bj.bcebos.com/dygraph/cityscapes/bisenet_cityscapes_1024x1024_160k/model.pdparams
-cd ..
-```
 
-## 将模型导出为静态图模型
+## Acquire trained weight
 
-请确保完成了PaddleSeg的安装工作，并且位于PaddleSeg目录下，执行以下脚本：
+After model training, the weight with the highest accuracy is saved in ` path/to/save/best_ model/model.pdparams`.
+
+For the convenience of this demo, we run the following commands to download the [trained weight](https://paddleseg.bj.bcebos.com/dygraph/cityscapes/pp_liteseg_stdc1_cityscapes_1024x512_scale0.5_160k/model.pdparams) of PP-LiteSeg.
+
 
 ```shell
-export CUDA_VISIBLE_DEVICES=0 # 设置1张可用的卡
-# windows下请执行以下命令
-# set CUDA_VISIBLE_DEVICES=0
-python export.py \
-       --config configs/bisenet/bisenet_cityscapes_1024x1024_160k.yml \
-       --model_path bisenet/model.pdparams
+wget https://paddleseg.bj.bcebos.com/dygraph/cityscapes/pp_liteseg_stdc1_cityscapes_1024x512_scale0.5_160k/model.pdparams
 ```
 
-### 导出脚本参数解释
+## Export the prediction Model
 
-|参数名|用途|是否必选项|默认值|
+Run the following command in the root of PaddleSeg, the inference model is saved in `output/inference_model`.
+
+```shell
+python tools/export.py \
+       --config configs/pp_liteseg/pp_liteseg_stdc1_cityscapes_1024x512_scale0.5_160k.yml \
+       --model_path model.pdparams \
+       --save_dir output/inference_model
+```
+
+**Description of Exported Script Parameters**
+
+|Parammeter|Purpose|Is Needed|Default|
 |-|-|-|-|
-|config|配置文件|是|-|
-|save_dir|模型和visualdl日志文件的保存根路径|否|output|
-|model_path|预训练模型参数的路径|否|配置文件中指定值|
+|config|The path of config file|yes|-|
+|model_path|The path of trained weight|no|-|
+|save_dir| The save dir for the inference model|no|`output/inference_model`|
+|input_shape| Set the input shape (`N*C*H*W`) of the inference model, such as `--input_shape 1 3 1024 1024`。if input_shape is not provided，the input shape of the inference model is [-1, 3, -1, -1]. If the image shape in prediction is fixed, you should set the input_shape. | no  | None |
+|output_op | Set the op that is appended to the inference model, should in [`argmax`, `softmax`, `none`]. PaddleSeg models outputs logits (`N*C*H*W`) by default. Adding `argmax` operation, we get the label for every pixel, the dimension of output is `N*H*W`. Adding `softmax` operation, we get the probability of different classes for every pixel. | no | argmax |
+|with_softmax| Deprecated params, please use --output_op. Add softmax operator at the end of the network. Since PaddleSeg networking returns Logits by default, you can set it to True if you want the deployment model to get the probability value|no|False|
+|without_argmax|Deprecated params, please use --output_op. Whether or not to add argmax operator at the end of the network. Since PaddleSeg networking returns Logits by default, we add argmax operator at the end of the network by default in order to directly obtain the prediction results for the deployment model|no|False|
 
-## 结果文件
+
+Note that:
+* If you encounter shape-relevant issue, please try to set the input_shape.
+
+## Prediction Model Files
 
 ```shell
-output
-  ├── deploy.yaml            # 部署相关的配置文件
-  ├── model.pdiparams        # 静态图模型参数
-  ├── model.pdiparams.info   # 参数额外信息，一般无需关注
-  └── model.pdmodel          # 静态图模型文件
+output/inference_model
+  ├── deploy.yaml            # Config file of deployment
+  ├── model.pdiparams        # Paramters of static model
+  ├── model.pdiparams.info   # Additional information witch is not concerned generally
+  └── model.pdmodel          # Static model file
 ```
 
-# 模型部署预测
+After exporting prediction model, it can be deployed by the following methods.
 
-PaddleSeg目前支持以下部署方式：
-
-|端侧|库|教程|
+|Deployment scenarios|Inference library|Tutorial|
 |-|-|-|
-|Python端部署|Paddle预测库|[示例](../deploy/python/)|
-|移动端部署|ONNX|完善中|
-|服务端部署|HubServing|完善中|
-|前端部署|PaddleJS|完善中|
+|Server (Nvidia GPU and X86 CPU) Python deployment|Paddle Inference|[doc](../deploy/python/)|
+|Server (Nvidia GPU and X86 CPU) C++ deployment|Paddle Inference|[doc](../deploy/cpp/)|
+|Mobile deployment|Paddle Lite|[doc](../deploy/lite/)|
+|Service-oriented deployment |Paddle Serving|[doc](../deploy/serving/)|
+|Web deployment|Paddle JS|[doc](../deploy/web/)|

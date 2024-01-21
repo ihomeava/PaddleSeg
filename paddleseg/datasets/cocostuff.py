@@ -41,17 +41,21 @@ class CocoStuff(Dataset):
         transforms (list): Transforms for image.
         dataset_root (str): Cityscapes dataset directory.
         mode (str): Which part of dataset to use. it is one of ('train', 'val'). Default: 'train'.
+        edge (bool, optional): Whether to compute edge while training. Default: False
     """
-    NUM_CLASSES = 172
+    NUM_CLASSES = 171
+    IGNORE_INDEX = 255
+    IMG_CHANNELS = 3
 
-    def __init__(self, transforms, dataset_root, mode='train'):
+    def __init__(self, transforms, dataset_root, mode='train', edge=False):
         self.dataset_root = dataset_root
         self.transforms = Compose(transforms)
         self.file_list = list()
         mode = mode.lower()
         self.mode = mode
         self.num_classes = self.NUM_CLASSES
-        self.ignore_index = 255
+        self.ignore_index = self.IGNORE_INDEX
+        self.edge = edge
 
         if mode not in ['train', 'val']:
             raise ValueError(
@@ -75,6 +79,7 @@ class CocoStuff(Dataset):
         img_files = sorted(
             glob.glob(os.path.join(img_dir, mode + '2017', '*.jpg')))
 
-        self.file_list = [[
-            img_path, label_path
-        ] for img_path, label_path in zip(img_files, label_files)]
+        self.file_list = [
+            [img_path, label_path]
+            for img_path, label_path in zip(img_files, label_files)
+        ]

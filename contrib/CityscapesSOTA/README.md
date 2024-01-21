@@ -8,8 +8,11 @@ Based on the above work, we made some optimizations:
 
 We achieve mIoU of **87%** on Cityscapes validation set.
 
-![demo](../../docs/images/cityscapes.gif)
+The actual effect is as follows (for high-definition pictures, please click [here](https://github.com/PaddlePaddle/PaddleSeg/blob/release/v2.0/docs/images/cityscapes.gif)).
 
+<div align="center">
+<img src=https://user-images.githubusercontent.com/30695251/144982303-51d40188-c00d-46b7-9012-41955c4e2156.gif  width = "500" />  
+</div>
 
 ## Installation
 
@@ -37,19 +40,24 @@ mkdir -p data/cityscapes
 ```
 
 Firstly please download 3 files from [Cityscapes dataset](https://www.cityscapes-dataset.com/downloads/)
-- leftImg8bit_trainvaltest.zip
-- gtFine_trainvaltest.zip
-- leftImg8bit_trainextra.zip
+- leftImg8bit_trainvaltest.zip (11GB)
+- gtFine_trainvaltest.zip (241MB)
+- leftImg8bit_trainextra.zip (44GB)
 
 Run the following commands to do the label conversion:
 ```shell
 pip install cityscapesscripts
-python ../../tools/convert_cityscapes.py --cityscapes_path data/cityscapes --num_workers 8
+python ../../tools/data/convert_cityscapes.py --cityscapes_path data/cityscapes --num_workers 8
 ```
 Where 'cityscapes_path' should be adjusted according to the actual dataset path. 'num_workers' determines the number of processes started and the size can be adjusted according to the actual situation.
 
-Then download Autolabelled-Data from [google drive](https://drive.google.com/file/d/1DtPo-WP-hjaOwsbj6ZxTtOo_7R_4TKRG/view?usp=sharing)
-- refinement_final_v0.zip
+Then download and uncompress Autolabelled-Data from [google drive](https://drive.google.com/file/d/1DtPo-WP-hjaOwsbj6ZxTtOo_7R_4TKRG/view?usp=sharing)
+- refinement_final_v0.zip # This file is needed for autolabelled training for recreating SOTA
+
+Delete useless `tmp` directory in `refinement_final` directory.
+```
+rm -r tmp/
+```
 
 Convert autolabelled data according to PaddleSeg data format:
 ```shell
@@ -137,3 +145,32 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -u -m paddle.distributed.launch trai
 ```
 Note that this requires 32GB of GPU memory. You can remove argument `--do_eval` to turn off evaluation during training, thus it only requires 25GB of GPU memory.
 If you run out of memory, try to lower the crop size.
+
+## Deploy
+
+Run the following command to export the inference model.
+
+```shell
+python export.py \
+    --config configs/mscale_ocr_cityscapes_autolabel_mapillary_ms_val.yml \
+    --save_dir ./output \
+    --input_shape 1 3 2048 1024
+```
+
+We can use the following deployment methods to deploy the inference model.
+
+| Platform         | Library           | Tutorial  |
+| :----------- | :----------- | :----- |
+| Python | Paddle prediction library | [e.g.](../../docs/deployment/inference/python_inference.md) |
+| C++ | Paddle prediction library | [e.g.](../../docs/deployment/inference/cpp_inference.md) |
+| Mobile | PaddleLite   | [e.g.](../../docs/deployment/lite/lite.md) |
+| Front-end | PaddleJS     | [e.g.](../../docs/deployment/web/web.md) |
+
+
+
+Other deployment documents:
+* [Inference with TensorRT in C++](https://github.com/PINTO0309/PINTO_model_zoo/tree/main/201_CityscapesSOTA/demo)
+* [Inference with ONNX Runtime in Python](https://github.com/iwatake2222/play_with_tensorrt/tree/master/pj_tensorrt_seg_paddleseg_cityscapessota)
+* Inference with TensorFlow Lite in Python https://github.com/axinc-ai/ailia-models/tree/master/image_segmentation/paddleseg
+
+Thanks for their contributions!

@@ -29,6 +29,8 @@ random.seed(100)
 
 @manager.DATASETS.add_component
 class CityscapesAutolabeling(paddle.io.Dataset):
+    NUM_CLASSES = 19
+    IMG_CHANNELS = 3
     """
     Cityscapes dataset with fine data, coarse data and autolabelled data.
     Source: https://www.cityscapes-dataset.com/
@@ -111,9 +113,10 @@ class CityscapesAutolabeling(paddle.io.Dataset):
         img_files = sorted(
             glob.glob(os.path.join(img_dir, mode, '*', '*_leftImg8bit.png')))
 
-        self.file_list = [[
-            img_path, label_path
-        ] for img_path, label_path in zip(img_files, label_files)]
+        self.file_list = [
+            [img_path, label_path]
+            for img_path, label_path in zip(img_files, label_files)
+        ]
         self.num_files = len(self.file_list)
         self.total_num_files = self.num_files
 
@@ -127,9 +130,10 @@ class CityscapesAutolabeling(paddle.io.Dataset):
                 img_files = sorted(
                     glob.glob(
                         os.path.join(img_dir, 'val', '*', '*_leftImg8bit.png')))
-                val_file_list = [[
-                    img_path, label_path
-                ] for img_path, label_path in zip(img_files, label_files)]
+                val_file_list = [
+                    [img_path, label_path]
+                    for img_path, label_path in zip(img_files, label_files)
+                ]
                 self.file_list.extend(val_file_list)
                 self.num_files = len(self.file_list)
 

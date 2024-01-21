@@ -39,6 +39,8 @@ class ADE20K(Dataset):
         edge (bool, optional): Whether to compute edge while training. Default: False
     """
     NUM_CLASSES = 150
+    IGNORE_INDEX = 255
+    IMG_CHANNELS = 3
 
     def __init__(self, transforms, dataset_root=None, mode='train', edge=False):
         self.dataset_root = dataset_root
@@ -47,7 +49,7 @@ class ADE20K(Dataset):
         self.mode = mode
         self.file_list = list()
         self.num_classes = self.NUM_CLASSES
-        self.ignore_index = 255
+        self.ignore_index = self.IGNORE_INDEX
         self.edge = edge
 
         if mode not in ['train', 'val']:
@@ -89,21 +91,29 @@ class ADE20K(Dataset):
             self.file_list.append([img_path, label_path])
 
     def __getitem__(self, idx):
+        data = {}
+        data['trans_info'] = []
         image_path, label_path = self.file_list[idx]
+        data['img'] = image_path
+        data['gt_fields'] = [
+        ]  # If key in gt_fields, the data[key] have transforms synchronous.
+
         if self.mode == 'val':
-            im, _ = self.transforms(im=image_path)
             label = np.asarray(Image.open(label_path))
             # The class 0 is ignored. And it will equal to 255 after
             # subtracted 1, because the dtype of label is uint8.
             label = label - 1
+            data = self.transforms(data)
             label = label[np.newaxis, :, :]
-            return im, label
+            data['label'] = label
+            return data
         else:
-            im, label = self.transforms(im=image_path, label=label_path)
-            label = label - 1
+            data['label'] = np.asarray(Image.open(label_path))
+            data['gt_fields'].append('label')
+            data['label'] = data['label'] - 1
+            data = self.transforms(data)
             if self.edge:
                 edge_mask = F.mask_to_binary_edge(
                     label, radius=2, num_classes=self.num_classes)
-                return im, label, edge_mask
-            else:
-                return im, label
+                data['edge'] = edge_mask
+            return data

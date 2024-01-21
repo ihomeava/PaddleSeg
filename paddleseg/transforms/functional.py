@@ -15,7 +15,20 @@
 import cv2
 import numpy as np
 from PIL import Image, ImageEnhance
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage import distance_transform_edt
+
+
+def crop(img, crop_coordinate):
+    x1, y1, x2, y2 = crop_coordinate
+    img = img[y1:y2, x1:x2, ...]
+    return img
+
+
+def rescale_size(img_size, target_size):
+    scale = min(
+        max(target_size) / max(img_size), min(target_size) / min(img_size))
+    rescaled_size = [round(i * scale) for i in img_size]
+    return rescaled_size, scale
 
 
 def normalize(im, mean, std):
@@ -39,6 +52,17 @@ def resize(im, target_size=608, interp=cv2.INTER_LINEAR):
 def resize_long(im, long_size=224, interpolation=cv2.INTER_LINEAR):
     value = max(im.shape[0], im.shape[1])
     scale = float(long_size) / float(value)
+    resized_width = int(round(im.shape[1] * scale))
+    resized_height = int(round(im.shape[0] * scale))
+
+    im = cv2.resize(
+        im, (resized_width, resized_height), interpolation=interpolation)
+    return im
+
+
+def resize_short(im, short_size=224, interpolation=cv2.INTER_LINEAR):
+    value = min(im.shape[0], im.shape[1])
+    scale = float(short_size) / float(value)
     resized_width = int(round(im.shape[1] * scale))
     resized_height = int(round(im.shape[0] * scale))
 
@@ -89,6 +113,12 @@ def hue(im, hue_lower, hue_upper):
     return im
 
 
+def sharpness(im, sharpness_lower, sharpness_upper):
+    sharpness_delta = np.random.uniform(sharpness_lower, sharpness_upper)
+    im = ImageEnhance.Sharpness(im).enhance(sharpness_delta)
+    return im
+
+
 def rotate(im, rotate_lower, rotate_upper):
     rotate_delta = np.random.uniform(rotate_lower, rotate_upper)
     im = im.rotate(int(rotate_delta))
@@ -128,11 +158,12 @@ def onehot_to_binary_edge(mask, radius):
 
     edge = np.zeros(mask.shape[1:])
     # pad borders
-    mask = np.pad(
-        mask, ((0, 0), (1, 1), (1, 1)), mode='constant', constant_values=0)
+    mask = np.pad(mask, ((0, 0), (1, 1), (1, 1)),
+                  mode='constant',
+                  constant_values=0)
     for i in range(num_classes):
-        dist = distance_transform_edt(
-            mask[i, :]) + distance_transform_edt(1.0 - mask[i, :])
+        dist = distance_transform_edt(mask[i, :]) + distance_transform_edt(
+            1.0 - mask[i, :])
         dist = dist[1:-1, 1:-1]
         dist[dist > radius] = 0
         edge += dist

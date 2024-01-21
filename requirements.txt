@@ -1,10 +1,8 @@
-pre-commit
-yapf == 0.26.0
-flake8
 pyyaml >= 5.1
-visualdl >= 2.0.0
-opencv-python
+visualdl >= 2.2.0
+opencv-python <= 4.6.0
 tqdm
 filelock
 scipy
 prettytable
+scikit-learn

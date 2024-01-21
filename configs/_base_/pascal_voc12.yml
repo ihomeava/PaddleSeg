@@ -3,7 +3,7 @@ iters: 40000
 
 train_dataset:
   type: PascalVOC
-  dataset_root: data/voc/VOCdevkit/
+  dataset_root: data/VOCdevkit/
   transforms:
     - type: ResizeStepScaling
       min_scale_factor: 0.5
@@ -21,24 +21,24 @@ train_dataset:
 
 val_dataset:
   type: PascalVOC
-  dataset_root: data/voc/VOCdevkit/
+  dataset_root: data/VOCdevkit/
   transforms:
     - type: Padding
       target_size: [512, 512]
     - type: Normalize
   mode: val
 
+
 optimizer:
-  type: sgd
+  type: SGD
   momentum: 0.9
   weight_decay: 4.0e-5
 
-learning_rate:
-  value: 0.01
-  decay:
-    type: poly
-    power: 0.9
-    end_lr: 0.0
+lr_scheduler:
+  type: PolynomialDecay
+  learning_rate: 0.01
+  end_lr: 0
+  power: 0.9
 
 loss:
   types:

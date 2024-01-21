@@ -54,6 +54,7 @@ class HRNetNV(nn.Layer):
         stage4_num_blocks (list): Number of blocks per module for stage4. Default [4, 4, 4, 4]
         stage4_num_channels (list): Number of channels per branch for stage4. Default [18, 36, 72. 144].
         has_se (bool): Whether to use Squeeze-and-Excitation module. Default False.
+        in_channels (int, optional): The channels of input image. Default: 3
         align_corners (bool, optional): An argument of F.interpolate. It should be set to False when the feature size is even,
             e.g. 1024x512, otherwise it is True, e.g. 769x769. Default: False.
     """
@@ -73,6 +74,7 @@ class HRNetNV(nn.Layer):
                  stage4_num_blocks=[4, 4, 4, 4],
                  stage4_num_channels=[18, 36, 72, 144],
                  has_se=False,
+                 in_channels=3,
                  align_corners=False):
         super(HRNetNV, self).__init__()
         self.pretrained = pretrained
@@ -93,7 +95,7 @@ class HRNetNV(nn.Layer):
         self.feat_channels = [sum(stage4_num_channels)]
 
         self.conv_layer1_1 = layers.ConvBNReLU(
-            in_channels=3,
+            in_channels=in_channels,
             out_channels=64,
             kernel_size=3,
             stride=2,
@@ -171,19 +173,13 @@ class HRNetNV(nn.Layer):
         tr3 = self.tr3(st3)
         st4 = self.st4(tr3)
 
-        x0_h, x0_w = st4[0].shape[2:]
+        x0_hw = paddle.shape(st4[0])[2:]
         x1 = F.interpolate(
-            st4[1], (x0_h, x0_w),
-            mode='bilinear',
-            align_corners=self.align_corners)
+            st4[1], x0_hw, mode='bilinear', align_corners=self.align_corners)
         x2 = F.interpolate(
-            st4[2], (x0_h, x0_w),
-            mode='bilinear',
-            align_corners=self.align_corners)
+            st4[2], x0_hw, mode='bilinear', align_corners=self.align_corners)
         x3 = F.interpolate(
-            st4[3], (x0_h, x0_w),
-            mode='bilinear',
-            align_corners=self.align_corners)
+            st4[3], x0_hw, mode='bilinear', align_corners=self.align_corners)
         x = paddle.concat([st4[0], x1, x2, x3], axis=1)
 
         return [x]
@@ -606,7 +602,7 @@ class FuseLayers(nn.Layer):
         residual_func_idx = 0
         for i in range(self._actual_ch):
             residual = x[i]
-            residual_shape = residual.shape[-2:]
+            residual_shape = paddle.shape(residual)[-2:]
             for j in range(len(self._in_channels)):
                 if j > i:
                     y = self.residual_func_list[residual_func_idx](x[j])

@@ -24,24 +24,32 @@ from paddleseg.transforms import Compose
 class PascalContext(Dataset):
     """
     PascalVOC2010 dataset `http://host.robots.ox.ac.uk/pascal/VOC/`.
-    If you want to use pascal context dataset, please run the convert_voc2010.py in tools firstly.
+    If you want to use pascal context dataset, please run the convert_voc2010.py in tools/data firstly.
 
     Args:
         transforms (list): Transforms for image.
         dataset_root (str): The dataset directory. Default: None
         mode (str): Which part of dataset to use. it is one of ('train', 'trainval', 'context', 'val').
             If you want to set mode to 'context', please make sure the dataset have been augmented. Default: 'train'.
+        edge (bool, optional): Whether to compute edge while training. Default: False
     """
-    NUM_CLASSES = 59
+    NUM_CLASSES = 60
+    IGNORE_INDEX = 255
+    IMG_CHANNELS = 3
 
-    def __init__(self, transforms=None, dataset_root=None, mode='train'):
+    def __init__(self,
+                 transforms=None,
+                 dataset_root=None,
+                 mode='train',
+                 edge=False):
         self.dataset_root = dataset_root
         self.transforms = Compose(transforms)
         mode = mode.lower()
         self.mode = mode
         self.file_list = list()
         self.num_classes = self.NUM_CLASSES
-        self.ignore_index = 255
+        self.ignore_index = self.IGNORE_INDEX
+        self.edge = edge
 
         if mode not in ['train', 'trainval', 'val']:
             raise ValueError(

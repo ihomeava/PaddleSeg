@@ -16,72 +16,29 @@ import collections.abc
 from itertools import combinations
 
 import numpy as np
+import cv2
 import paddle
 import paddle.nn.functional as F
 
 
-def get_reverse_list(ori_shape, transforms):
-    """
-    get reverse list of transform.
-
-    Args:
-        ori_shape (list): Origin shape of image.
-        transforms (list): List of transform.
-
-    Returns:
-        list: List of tuple, there are two format:
-            ('resize', (h, w)) The image shape before resize,
-            ('padding', (h, w)) The image shape before padding.
-    """
-    reverse_list = []
-    h, w = ori_shape[0], ori_shape[1]
-    for op in transforms:
-        if op.__class__.__name__ in ['Resize']:
-            reverse_list.append(('resize', (h, w)))
-            h, w = op.target_size[0], op.target_size[1]
-        if op.__class__.__name__ in ['ResizeByLong']:
-            reverse_list.append(('resize', (h, w)))
-            long_edge = max(h, w)
-            short_edge = min(h, w)
-            short_edge = int(round(short_edge * op.long_size / long_edge))
-            long_edge = op.long_size
-            if h > w:
-                h = long_edge
-                w = short_edge
-            else:
-                w = long_edge
-                h = short_edge
-        if op.__class__.__name__ in ['Padding']:
-            reverse_list.append(('padding', (h, w)))
-            w, h = op.target_size[0], op.target_size[1]
-        if op.__class__.__name__ in ['LimitLong']:
-            long_edge = max(h, w)
-            short_edge = min(h, w)
-            if ((op.max_long is not None) and (long_edge > op.max_long)):
-                reverse_list.append(('resize', (h, w)))
-                long_edge = op.max_long
-                short_edge = int(round(short_edge * op.max_long / long_edge))
-            elif ((op.min_long is not None) and (long_edge < op.min_long)):
-                reverse_list.append(('resize', (h, w)))
-                long_edge = op.min_long
-                short_edge = int(round(short_edge * op.min_long / long_edge))
-            if h > w:
-                h = long_edge
-                w = short_edge
-            else:
-                w = long_edge
-                h = short_edge
-    return reverse_list
-
-
-def reverse_transform(pred, ori_shape, transforms):
+def reverse_transform(pred, trans_info, mode='nearest'):
     """recover pred to origin shape"""
-    reverse_list = get_reverse_list(ori_shape, transforms)
-    for item in reverse_list[::-1]:
-        if item[0] == 'resize':
+    intTypeList = [paddle.int8, paddle.int16, paddle.int32, paddle.int64]
+    dtype = pred.dtype
+    for item in trans_info[::-1]:
+        if isinstance(item[0], list):
+            trans_mode = item[0][0]
+        else:
+            trans_mode = item[0]
+        if trans_mode == 'resize':
             h, w = item[1][0], item[1][1]
-            pred = F.interpolate(pred, (h, w), mode='nearest')
-        elif item[0] == 'padding':
+            if paddle.get_device() == 'cpu' and dtype in intTypeList:
+                pred = paddle.cast(pred, 'float32')
+                pred = F.interpolate(pred, [h, w], mode=mode)
+                pred = paddle.cast(pred, dtype)
+            else:
+                pred = F.interpolate(pred, [h, w], mode=mode)
+        elif trans_mode == 'padding':
             h, w = item[1][0], item[1][1]
             pred = pred[:, :, 0:h, 0:w]
         else:
@@ -138,8 +95,8 @@ def slide_inference(model, im, crop_size, stride):
     w_crop, h_crop = crop_size
     w_stride, h_stride = stride
     # calculate the crop nums
-    rows = np.int(np.ceil(1.0 * (h_im - h_crop) / h_stride)) + 1
-    cols = np.int(np.ceil(1.0 * (w_im - w_crop) / w_stride)) + 1
+    rows = int(np.ceil(1.0 * (h_im - h_crop) / h_stride)) + 1
+    cols = int(np.ceil(1.0 * (w_im - w_crop) / w_stride)) + 1
     # prevent negative sliding rounds when imgs after scaling << crop_size
     rows = 1 if h_im <= h_crop else rows
     cols = 1 if w_im <= w_crop else cols
@@ -176,27 +133,29 @@ def slide_inference(model, im, crop_size, stride):
 
 def inference(model,
               im,
-              ori_shape=None,
-              transforms=None,
+              trans_info=None,
               is_slide=False,
               stride=None,
-              crop_size=None):
+              crop_size=None,
+              use_multilabel=False):
     """
     Inference for image.
 
     Args:
         model (paddle.nn.Layer): model to get logits of image.
         im (Tensor): the input image.
-        ori_shape (list): Origin shape of image.
-        transforms (list): Transforms for image.
+        trans_info (list): Image shape informating changed process. Default: None.
         is_slide (bool): Whether to infer by sliding window. Default: False.
         crop_size (tuple|list). The size of sliding window, (w, h). It should be probided if is_slide is True.
         stride (tuple|list). The size of stride, (w, h). It should be probided if is_slide is True.
+        use_multilabel (bool, optional): Whether to enable multilabel mode. Default: False.
 
     Returns:
         Tensor: If ori_shape is not None, a prediction with shape (1, 1, h, w) is returned.
             If ori_shape is None, a logit with shape (1, num_classes, h, w) is returned.
     """
+    if hasattr(model, 'data_format') and model.data_format == 'NHWC':
+        im = im.transpose((0, 2, 3, 1))
     if not is_slide:
         logits = model(im)
         if not isinstance(logits, collections.abc.Sequence):
@@ -206,38 +165,43 @@ def inference(model,
         logit = logits[0]
     else:
         logit = slide_inference(model, im, crop_size=crop_size, stride=stride)
-    if ori_shape is not None:
-        pred = paddle.argmax(logit, axis=1, keepdim=True, dtype='int32')
-        pred = reverse_transform(pred, ori_shape, transforms)
-        return pred
+    if hasattr(model, 'data_format') and model.data_format == 'NHWC':
+        logit = logit.transpose((0, 3, 1, 2))
+    if trans_info is not None:
+        logit = reverse_transform(logit, trans_info, mode='bilinear')
+        if not use_multilabel:
+            pred = paddle.argmax(logit, axis=1, keepdim=True, dtype='int32')
+        else:
+            pred = (F.sigmoid(logit) > 0.5).astype('int32')
+        return pred, logit
     else:
         return logit
 
 
 def aug_inference(model,
                   im,
-                  ori_shape,
-                  transforms,
+                  trans_info,
                   scales=1.0,
                   flip_horizontal=False,
                   flip_vertical=False,
                   is_slide=False,
                   stride=None,
-                  crop_size=None):
+                  crop_size=None,
+                  use_multilabel=False):
     """
     Infer with augmentation.
 
     Args:
         model (paddle.nn.Layer): model to get logits of image.
         im (Tensor): the input image.
-        ori_shape (list): Origin shape of image.
-        transforms (list): Transforms for image.
+        trans_info (list): Transforms for image.
         scales (float|tuple|list):  Scales for resize. Default: 1.
         flip_horizontal (bool): Whether to flip horizontally. Default: False.
         flip_vertical (bool): Whether to flip vertically. Default: False.
         is_slide (bool): Whether to infer by sliding wimdow. Default: False.
         crop_size (tuple|list). The size of sliding window, (w, h). It should be probided if is_slide is True.
         stride (tuple|list). The size of stride, (w, h). It should be probided if is_slide is True.
+        use_multilabel (bool, optional): Whether to enable multilabel mode. Default: False.
 
     Returns:
         Tensor: Prediction of image with shape (1, 1, h, w) is returned.
@@ -251,12 +215,13 @@ def aug_inference(model,
     final_logit = 0
     h_input, w_input = im.shape[-2], im.shape[-1]
     flip_comb = flip_combination(flip_horizontal, flip_vertical)
+    num_augs = len(scales) * len(flip_comb)
     for scale in scales:
         h = int(h_input * scale + 0.5)
         w = int(w_input * scale + 0.5)
-        im = F.interpolate(im, (h, w), mode='bilinear')
+        im_scale = F.interpolate(im, [h, w], mode='bilinear')
         for flip in flip_comb:
-            im_flip = tensor_flip(im, flip)
+            im_flip = tensor_flip(im_scale, flip)
             logit = inference(
                 model,
                 im_flip,
@@ -264,11 +229,16 @@ def aug_inference(model,
                 crop_size=crop_size,
                 stride=stride)
             logit = tensor_flip(logit, flip)
-            logit = F.interpolate(logit, (h_input, w_input), mode='bilinear')
+            logit = F.interpolate(logit, [h_input, w_input], mode='bilinear')
+            # Accumulate final logits in place
+            final_logit += logit
+    # We average the accumulated logits to make the numeric values of `final_logit`
+    # comparable to single-scale logits
+    final_logit /= num_augs
+    final_logit = reverse_transform(final_logit, trans_info, mode='bilinear')
+    if not use_multilabel:
+        pred = paddle.argmax(final_logit, axis=1, keepdim=True, dtype='int32')
+    else:
+        pred = (F.sigmoid(final_logit) > 0.5).astype('int32')
 
-            logit = F.softmax(logit, axis=1)
-            final_logit = final_logit + logit
-
-    pred = paddle.argmax(final_logit, axis=1, keepdim=True, dtype='int32')
-    pred = reverse_transform(pred, ori_shape, transforms)
-    return pred
+    return pred, final_logit

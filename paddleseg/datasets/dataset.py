@@ -62,10 +62,11 @@ class Dataset(paddle.io.Dataset):
     """
 
     def __init__(self,
-                 transforms,
+                 mode,
                  dataset_root,
+                 transforms,
                  num_classes,
-                 mode='train',
+                 img_channels=3,
                  train_path=None,
                  val_path=None,
                  test_path=None,
@@ -73,45 +74,49 @@ class Dataset(paddle.io.Dataset):
                  ignore_index=255,
                  edge=False):
         self.dataset_root = dataset_root
-        self.transforms = Compose(transforms)
+        self.transforms = Compose(transforms, img_channels=img_channels)
         self.file_list = list()
-        mode = mode.lower()
-        self.mode = mode
+        self.mode = mode.lower()
         self.num_classes = num_classes
+        self.img_channels = img_channels
         self.ignore_index = ignore_index
         self.edge = edge
 
-        if mode.lower() not in ['train', 'val', 'test']:
+        if self.mode not in ['train', 'val', 'test']:
             raise ValueError(
                 "mode should be 'train', 'val' or 'test', but got {}.".format(
-                    mode))
-
-        if self.transforms is None:
-            raise ValueError("`transforms` is necessary, but it is None.")
-
-        self.dataset_root = dataset_root
+                    self.mode))
         if not os.path.exists(self.dataset_root):
             raise FileNotFoundError('there is not `dataset_root`: {}.'.format(
                 self.dataset_root))
+        if self.transforms is None:
+            raise ValueError("`transforms` is necessary, but it is None.")
+        if num_classes < 1:
+            raise ValueError(
+                "`num_classes` should be greater than 1, but got {}".format(
+                    num_classes))
+        if img_channels not in [1, 3]:
+            raise ValueError("`img_channels` should in [1, 3], but got {}".
+                             format(img_channels))
 
-        if mode == 'train':
+        if self.mode == 'train':
             if train_path is None:
                 raise ValueError(
                     'When `mode` is "train", `train_path` is necessary, but it is None.'
                 )
             elif not os.path.exists(train_path):
-                raise FileNotFoundError(
-                    '`train_path` is not found: {}'.format(train_path))
+                raise FileNotFoundError('`train_path` is not found: {}'.format(
+                    train_path))
             else:
                 file_path = train_path
-        elif mode == 'val':
+        elif self.mode == 'val':
             if val_path is None:
                 raise ValueError(
                     'When `mode` is "val", `val_path` is necessary, but it is None.'
                 )
             elif not os.path.exists(val_path):
-                raise FileNotFoundError(
-                    '`val_path` is not found: {}'.format(val_path))
+                raise FileNotFoundError('`val_path` is not found: {}'.format(
+                    val_path))
             else:
                 file_path = val_path
         else:
@@ -120,8 +125,8 @@ class Dataset(paddle.io.Dataset):
                     'When `mode` is "test", `test_path` is necessary, but it is None.'
                 )
             elif not os.path.exists(test_path):
-                raise FileNotFoundError(
-                    '`test_path` is not found: {}'.format(test_path))
+                raise FileNotFoundError('`test_path` is not found: {}'.format(
+                    test_path))
             else:
                 file_path = test_path
 
@@ -129,7 +134,7 @@ class Dataset(paddle.io.Dataset):
             for line in f:
                 items = line.strip().split(separator)
                 if len(items) != 2:
-                    if mode == 'train' or mode == 'val':
+                    if self.mode == 'train' or self.mode == 'val':
                         raise ValueError(
                             "File list format incorrect! In training or evaluation task it should be"
                             " image_name{}label_name\\n".format(separator))
@@ -141,24 +146,26 @@ class Dataset(paddle.io.Dataset):
                 self.file_list.append([image_path, label_path])
 
     def __getitem__(self, idx):
+        data = {}
+        data['trans_info'] = []
         image_path, label_path = self.file_list[idx]
-        if self.mode == 'test':
-            im, _ = self.transforms(im=image_path)
-            im = im[np.newaxis, ...]
-            return im, image_path
-        elif self.mode == 'val':
-            im, _ = self.transforms(im=image_path)
-            label = np.asarray(Image.open(label_path))
-            label = label[np.newaxis, :, :]
-            return im, label
+        data['img'] = image_path
+        data['label'] = label_path
+        # If key in gt_fields, the data[key] have transforms synchronous.
+        data['gt_fields'] = []
+        if self.mode == 'val':
+            data = self.transforms(data)
+            if data['label'].ndim == 2:
+                data['label'] = data['label'][np.newaxis, :, :]
+
         else:
-            im, label = self.transforms(im=image_path, label=label_path)
+            data['gt_fields'].append('label')
+            data = self.transforms(data)
             if self.edge:
                 edge_mask = F.mask_to_binary_edge(
-                    label, radius=2, num_classes=self.num_classes)
-                return im, label, edge_mask
-            else:
-                return im, label
+                    data['label'], radius=2, num_classes=self.num_classes)
+                data['edge'] = edge_mask
+        return data
 
     def __len__(self):
         return len(self.file_list)

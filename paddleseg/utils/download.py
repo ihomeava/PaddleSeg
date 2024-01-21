@@ -102,8 +102,8 @@ def _uncompress_file(filepath, extrapath, delete_file, print_progress):
     for total_num, index, rootpath in handler(filepath, extrapath):
         if print_progress:
             done = int(50 * float(index) / total_num)
-            progress(
-                "[%-50s] %.2f%%" % ('=' * done, float(100 * index) / total_num))
+            progress("[%-50s] %.2f%%" %
+                     ('=' * done, float(100 * index) / total_num))
     if print_progress:
         progress("[%-50s] %.2f%%" % ('=' * 50, 100), end=True)
 
@@ -119,7 +119,8 @@ def download_file_and_uncompress(url,
                                  extraname=None,
                                  print_progress=True,
                                  cover=False,
-                                 delete_file=True):
+                                 delete_file=True,
+                                 filename=None):
     if savepath is None:
         savepath = "."
 
@@ -133,8 +134,8 @@ def download_file_and_uncompress(url,
     savepath = os.path.join(savepath, savename)
     savename = ".".join(savename.split(".")[:-1])
     savename = os.path.join(extrapath, savename)
-    extraname = savename if extraname is None else os.path.join(
-        extrapath, extraname)
+    extraname = savename if extraname is None else os.path.join(extrapath,
+                                                                extraname)
 
     if cover:
         if os.path.exists(savepath):
@@ -143,21 +144,37 @@ def download_file_and_uncompress(url,
             shutil.rmtree(savename)
         if os.path.exists(extraname):
             shutil.rmtree(extraname)
+    full_path = os.path.join(extraname,
+                             filename) if filename is not None else extraname
 
-    if not os.path.exists(extraname):
-        if not os.path.exists(savename):
-            if not os.path.exists(savepath):
-                _download_file(url, savepath, print_progress)
+    rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
 
-            if (not tarfile.is_tarfile(savepath)) and (
-                    not zipfile.is_zipfile(savepath)):
-                if not os.path.exists(extraname):
-                    os.makedirs(extraname)
-                shutil.move(savepath, extraname)
-                return extraname
+    if not os.path.exists(
+            full_path):  # If pretrained model exists, skip download process.
+        lock_path = extraname + '.download.lock'
+        with open(lock_path, 'w'):  # touch    
+            os.utime(lock_path, None)
+        if rank_id_curr_node == 0:
+            if not os.path.exists(savename):
+                if not os.path.exists(savepath):
+                    _download_file(url, savepath, print_progress)
 
-            savename = _uncompress_file(savepath, extrapath, delete_file,
-                                        print_progress)
-            savename = os.path.join(extrapath, savename)
-        shutil.move(savename, extraname)
+                if (not tarfile.is_tarfile(savepath)) and (
+                        not zipfile.is_zipfile(savepath)):
+                    if not os.path.exists(extraname):
+                        os.makedirs(extraname)
+                    shutil.move(savepath, extraname)
+
+                else:
+                    savename = _uncompress_file(savepath, extrapath,
+                                                delete_file, print_progress)
+                    savename = os.path.join(extrapath, savename)
+                    shutil.move(savename, extraname)
+
+            os.remove(lock_path)
+
+        else:
+            while os.path.exists(lock_path):
+                time.sleep(0.5)
+
     return extraname
